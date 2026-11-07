@@ -36,7 +36,37 @@ from astrbot.api.star import Context, Star, register
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(PLUGIN_DIR, "push_state.json")
+LEGACY_STATE_FILE = os.path.join(PLUGIN_DIR, "push_state.json")
+
+
+def _plugin_data_dir() -> str:
+    """插件持久化目录：data/plugin_data/astrbot_plugin_daily_weather/。
+
+    审核要求：状态文件不能放插件目录（更新/重装会跟着丢），也不能散在 data 根下。
+    """
+    try:
+        from astrbot.core.star.star_tools import StarTools
+
+        base = str(StarTools.get_data_dir("astrbot_plugin_daily_weather"))
+    except Exception:
+        base = os.path.join(os.path.dirname(os.path.dirname(PLUGIN_DIR)),
+                            "plugin_data", "astrbot_plugin_daily_weather")
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def state_file() -> str:
+    """状态文件路径；第一次用的时候把插件目录里的老文件复制过来。"""
+    path = os.path.join(_plugin_data_dir(), "push_state.json")
+    if not os.path.exists(path) and os.path.exists(LEGACY_STATE_FILE):
+        try:
+            import shutil
+
+            shutil.copy2(LEGACY_STATE_FILE, path)
+            logger.info("[daily_weather] 已把状态文件迁移到 %s（旧文件保留）", path)
+        except OSError as exc:
+            logger.warning("[daily_weather] 迁移状态文件失败: %s", exc)
+    return path
 
 TAG = "[daily_weather]"
 WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -752,7 +782,7 @@ class DailyWeather(Star):
 
     # ---------- 生命周期 ----------
     async def initialize(self):
-        self._state = self._load_json(STATE_FILE, {})
+        self._state = self._load_json(state_file(), {})
         if not isinstance(self._state.get("cities"), dict):
             self._state["cities"] = {}
         if not isinstance(self._state.get("session_cities"), dict):
@@ -841,7 +871,7 @@ class DailyWeather(Star):
     def _save_state(self):
         """读-合并-写：两个实例同时活着时，别把对方刚写的台账擦掉。"""
         try:
-            disk = self._load_json(STATE_FILE, {}) or {}
+            disk = self._load_json(state_file(), {}) or {}
             merged = dict(disk)
             merged.update(self._state)
             if disk.get("claimed"):
@@ -852,10 +882,10 @@ class DailyWeather(Star):
                 if d or m:
                     merged[key] = {**d, **m}
             merged["updated_at"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            tmp = STATE_FILE + ".tmp"
+            tmp = state_file() + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fp:
                 json.dump(merged, fp, ensure_ascii=False, indent=2)
-            os.replace(tmp, STATE_FILE)
+            os.replace(tmp, state_file())
             self._state = merged
         except Exception as exc:
             logger.error("%s 写入状态文件失败: %s", TAG, exc)
@@ -864,7 +894,7 @@ class DailyWeather(Star):
         """跨实例去重：抢「今天这一次推送」的名额。写盘失败按抢到处理（宁可重一条也别漏）。"""
         today = dt.date.today().isoformat()
         try:
-            st = self._load_json(STATE_FILE, {}) or {}
+            st = self._load_json(state_file(), {}) or {}
             claimed = st.get("claimed") or {}
             if claimed.get("date") != today:
                 claimed = {"date": today, "keys": []}
@@ -874,10 +904,10 @@ class DailyWeather(Star):
             keys.append(key)
             claimed["keys"] = keys
             st["claimed"] = claimed
-            tmp = STATE_FILE + ".tmp"
+            tmp = state_file() + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fp:
                 json.dump(st, fp, ensure_ascii=False, indent=2)
-            os.replace(tmp, STATE_FILE)
+            os.replace(tmp, state_file())
             self._state["claimed"] = claimed
             return True
         except Exception as exc:
@@ -1010,7 +1040,7 @@ class DailyWeather(Star):
         try:
             base = get_astrbot_temp_path()
         except Exception:
-            base = os.path.join(PLUGIN_DIR, ".card_tmp")
+            base = os.path.join(get_astrbot_temp_path(), "daily_weather_cards")
         d = os.path.join(base, "daily_weather")
         os.makedirs(d, exist_ok=True)
         return d

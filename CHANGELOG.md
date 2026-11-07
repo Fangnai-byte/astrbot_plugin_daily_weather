@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.2] - 2026-11-07
+
+### 变更：状态文件搬到 data/plugin_data/
+- 审核意见：持久化数据必须落在 `data/plugin_data/<plugin_name>/`。
+  `push_state.json`（各会话城市、地理编码缓存、推送去重台账）原来写在插件目录里，
+  插件更新或重装就跟着目录一起没了。
+- 现在写到 `data/plugin_data/astrbot_plugin_daily_weather/push_state.json`。
+- 首次读写时自动把插件目录里的老文件复制过来，老文件保留。
+- 顺带：卡片临时图从插件目录的 `.card_tmp` 改到 AstrBot 临时目录。
+
 ## [1.4.1] - 2026-11-07
 
 ### 修复：和风源的降水量被当成降水概率用
