@@ -1,0 +1,1 @@
+# astrbot_plugin_daily_weather
