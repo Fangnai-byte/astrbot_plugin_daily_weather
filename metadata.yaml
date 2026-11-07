@@ -1,0 +1,49 @@
+# 插件的唯一标识名 (不要改)
+name: astrbot_plugin_daily_weather
+
+# 插件展示名
+display_name: 每日天气 (Daily Weather)
+
+# 插件的一句话简介
+desc: 每天定时推送天气预报（可选图片卡片）：和风天气优先，没配 key 用免密钥的 Open-Meteo；每人城市各设各的、群推送可同时报多个城市
+
+# 插件的详细帮助信息
+help: |
+  每天定时推送天气（默认 07:00 看今天、21:00 看明天），默认发一张本地绘制的
+  天气卡片（Pillow 画，不需要开 AstrBot 的 t2i，也不联网）；画不出来自动退回文字。
+
+  数据源：和风天气（在配置里填 API Key 即可，能拿到气象预警）或免密钥的 Open-Meteo
+  （开箱即用，没有预警/空气质量）。
+
+  指令：
+    /天气 [城市]        - 立即查天气（不改变订阅）              —— 谁都可以用
+    /天气 城市 <城市>    - 设你自己的城市（同群各设各的）        —— 谁都可以用
+    /天气 帮助          - 显示帮助                             —— 谁都可以用
+    /天气 订阅 [城市…]   - 订阅推送，可一次多个城市（/天气 订阅 上海 北京）—— 仅管理员
+    /天气 添加城市 <城市…> - 往推送城市里加                   —— 仅管理员
+    /天气 移除城市 <城市…> - 从推送城市里去掉                 —— 仅管理员
+    /天气 退订          - 取消订阅                             —— 仅管理员
+    /天气 订阅列表       - 查看订阅了哪些会话                    —— 仅管理员
+    /天气 测试 [全部]    - 立刻推一条试试（默认只发当前会话）      —— 仅管理员
+
+  提醒规则（可在配置里调阈值）：有雨带伞、降温加衣、大风、高温、严寒、强紫外线、气象预警。
+  打开 alert_only 后，只有出现这些情况才推，其余日子静默。
+
+# (可选) 插件 Logo 文件名（对应插件目录下的 logo.png）
+logo: "https://raw.githubusercontent.com/Fangnai-byte/astrbot_plugin_daily_weather/main/logo.png"
+
+# (可选) 你的 GitHub 仓库地址
+repo: "https://github.com/Fangnai-byte/astrbot_plugin_daily_weather"
+
+# 插件版本号
+version: 1.4.1
+
+# 作者名
+author: Fangnai-byte
+
+# 声明支持的平台
+support_platforms:
+  - aiocqhttp
+
+# 声明支持的 AstrBot 版本范围
+astrbot_version: ">=3.8.0"

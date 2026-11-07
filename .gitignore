@@ -1,0 +1,5 @@
+# 运行状态（去重台账、城市与地理缓存）不该进仓库
+push_state.json
+push_state.json.tmp
+*.bak*
+__pycache__/

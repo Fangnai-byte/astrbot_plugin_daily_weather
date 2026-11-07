@@ -1,0 +1,143 @@
+{
+  "provider": {
+    "description": "天气数据源",
+    "hint": "auto（默认）：填了和风 key 就用和风，没填就用 Open-Meteo；qweather：只用和风（失败会回落到 Open-Meteo 并记日志）；openmeteo：只用 Open-Meteo（免密钥，开箱即用，但没有气象预警/空气质量/生活指数）",
+    "type": "string",
+    "default": "auto"
+  },
+  "qweather_key": {
+    "description": "和风天气 API Key（可选）",
+    "hint": "留空则用免密钥的 Open-Meteo。填了之后能拿到中文更全的数据、逐小时预报与**气象预警**（有预警一定会推）。和风免费版需要去 console.qweather.com 申请 Key，并填写下面的专属 API Host",
+    "type": "string",
+    "default": ""
+  },
+  "qweather_host": {
+    "description": "和风天气专属 API Host（可选）",
+    "hint": "和风新版要求用你自己的 Host，形如 abcdefg.re.qweatherapi.com（在控制台「设置 → API Host」能看到）。留空则用旧域名 devapi.qweather.com（部分新账号会拒绝）",
+    "type": "string",
+    "default": ""
+  },
+  "push_times": {
+    "description": "推送时刻（每个时刻一条推送）",
+    "hint": "24 小时制 HH:MM，可填多个。时刻早于 evening_after 的推**今天**，晚于的推**明天**。例：[\"07:00\", \"21:00\"] = 早上看今天、晚上看明天。留空则不会自动推送（仍可用 /天气 测试 手动试）",
+    "type": "list",
+    "default": [
+      "07:00",
+      "21:00"
+    ]
+  },
+  "evening_after": {
+    "description": "几点之后算“晚上”（推送改成看明天）",
+    "hint": "默认 18：18 点之前的推送看今天，18 点之后看明天",
+    "type": "int",
+    "default": 18
+  },
+  "alert_only": {
+    "description": "只在“值得提醒”时才推",
+    "hint": "开着：只有出现有雨/降温/大风/高温/严寒/强紫外线/气象预警时才推，其余日子静默（更安静）。关着：每天按时刻照推（默认）",
+    "type": "bool",
+    "default": false
+  },
+  "default_city": {
+    "description": "默认城市（会话没单独设置时用它）",
+    "hint": "填中文城市名即可，例如 上海。每个会话都能用 /天气 城市 <城市> 单独设置，互不影响；留空且会话也没设城市时，推送会跳过并记日志",
+    "type": "string",
+    "default": ""
+  },
+  "target_sessions": {
+    "description": "推送目标（由 /天气 订阅 维护，也可在这里手填）",
+    "hint": "格式是会话标识，形如 平台实例名:GroupMessage:群号 或 平台实例名:FriendMessage:QQ号。一般不用手填：在群里发 /天气 订阅 上海 就会自动加进来",
+    "type": "list",
+    "default": []
+  },
+  "at_all": {
+    "description": "群推送时是否 @全体成员",
+    "hint": "默认关。天气属于日常信息，@全体成员容易打扰；需要强提醒再打开",
+    "type": "bool",
+    "default": false
+  },
+  "alert_rain_prob": {
+    "description": "提醒带伞的降水概率阈值（%）",
+    "hint": "降水概率达到这个值就提醒带伞（默认 40）。和风 3 天预报只给降水量没有概率，那时按“有降水量”提醒",
+    "type": "int",
+    "default": 40
+  },
+  "alert_temp_drop": {
+    "description": "降温提醒阈值（℃）",
+    "hint": "下一天最高温比当前这天低这么多就提醒加衣（默认 5）",
+    "type": "int",
+    "default": 5
+  },
+  "alert_wind_kmh": {
+    "description": "大风提醒阈值（km/h）",
+    "hint": "风速达到这个值就提醒防风（默认 39，约 6 级）",
+    "type": "int",
+    "default": 39
+  },
+  "alert_heat": {
+    "description": "高温提醒阈值（℃）",
+    "hint": "最高温达到这个值就提醒防暑（默认 35）；填 0 关闭",
+    "type": "int",
+    "default": 35
+  },
+  "alert_cold": {
+    "description": "低温提醒阈值（℃）",
+    "hint": "最低温低于或等于这个值就提醒保暖（默认 0）",
+    "type": "int",
+    "default": 0
+  },
+  "alert_uv": {
+    "description": "紫外线提醒阈值",
+    "hint": "紫外线指数达到这个值就提醒防晒（默认 8，属于“很强”）；填 0 关闭",
+    "type": "int",
+    "default": 8
+  },
+  "max_push_cities": {
+    "description": "一条推送里最多列几个城市",
+    "hint": "群推送可以同时播报多个城市（每个城市一段）。列太多会让消息很长，默认 3；超出的城市不会列进这条推送（会附一句提示）",
+    "type": "int",
+    "default": 3
+  },
+  "card_enabled": {
+    "description": "推送/查询时发天气卡片图片",
+    "hint": "开着会画一张 PNG 卡片（Pillow 本地绘制，不需要开 AstrBot 的 t2i，也不联网）。画不出来时自动退回纯文字。关掉就只发文字",
+    "type": "bool",
+    "default": true
+  },
+  "card_with_text": {
+    "description": "发卡片的同时再发一条文字",
+    "hint": "默认只发卡片（更清爽）。有些客户端/平台对图片支持不好时，可以打开这个做兜底",
+    "type": "bool",
+    "default": false
+  },
+  "card_width": {
+    "description": "卡片宽度（像素）",
+    "hint": "默认 760。手机上看 700~800 比较合适，太小会挤、太大发出去会被压缩",
+    "type": "int",
+    "default": 760
+  },
+  "query_cooldown_seconds": {
+    "description": "手动查询的冷却时间（秒，管理员不受限）",
+    "hint": "查天气谁都可以用，这里给非管理员加一个轻量冷却，防止有人在群里刷 /天气 把接口打满。默认 10 秒；填 0 关闭冷却",
+    "type": "int",
+    "default": 10
+  },
+  "cache_minutes": {
+    "description": "同一天气结果的缓存分钟数",
+    "hint": "避免多目标/反复查询时重复请求。默认 30 分钟；调小会让数据更新但请求更频繁",
+    "type": "int",
+    "default": 30
+  },
+  "timeout": {
+    "description": "天气接口超时（秒）",
+    "hint": "默认 15 秒。超时/失败就不推这一条（并记日志），不会发半截消息",
+    "type": "int",
+    "default": 15
+  },
+  "footer": {
+    "description": "推送末尾附加的一行（可选）",
+    "hint": "留空则没有。可以写一句固定的话，例如“—— 每天 07:00 / 21:00 播报”",
+    "type": "string",
+    "default": ""
+  }
+}
