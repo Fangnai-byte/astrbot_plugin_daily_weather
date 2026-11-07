@@ -38,6 +38,14 @@
 astrbot_plugin_daily_weather
 ```
 
+## 数据存放
+
+插件的状态文件 `push_state.json` 在 `data/plugin_data/astrbot_plugin_daily_weather/` 下，
+里面是各会话的城市、地理编码缓存和推送去重台账。删掉它等于重置所有订阅。
+
+1.4.2 之前的版本把这个文件放在插件目录里，升级后首次运行会自动复制到新位置，
+旧文件保留不删。卡片临时图写在 AstrBot 的临时目录，不占插件目录。
+
 ## 使用
 
 **谁都可以用**（不需要管理员）：
