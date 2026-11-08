@@ -300,6 +300,19 @@ def resolve_day_index(days: list, offset: int | None, month_day: tuple[int, int]
     return offset if 0 <= offset < len(days or []) else -1
 
 
+def _alert_text(w: dict) -> str:
+    """把和风的预警条目拼成一行：级别 + 标题。字段名两版接口不完全一样，都试一遍。"""
+    if not isinstance(w, dict):
+        return str(w or "")
+    title = str(w.get("title") or w.get("headline") or "").strip()
+    if not title:
+        return ""
+    sev = str(w.get("severity") or w.get("severityColor") or "").strip()
+    typ = str(w.get("typeName") or "").strip()
+    bits = [b for b in (sev, typ) if b and b not in title]
+    return "·".join(bits + [title]) if bits else title
+
+
 def normalize_qweather(daily: dict, now: dict, city: str, warnings=None) -> list:
     """和风 /v7/weather/3d（+ /now、/warning/now）→ 统一结构。"""
     days = []
@@ -330,7 +343,7 @@ def normalize_qweather(daily: dict, now: dict, city: str, warnings=None) -> list
             "feels_now": _num((now or {}).get("feelsLike")) if i == 0 else None,
             "text_now": str((now or {}).get("text") or "") if i == 0 else "",
             "emoji_now": emoji_for_text((now or {}).get("text")) if i == 0 else "",
-            "warnings": [str(w.get("title") or "") for w in (warnings or []) if w.get("title")] if i == 0 else [],
+            "warnings": [_alert_text(w) for w in (warnings or []) if _alert_text(w)] if i == 0 else [],
             "hourly_peak": None,
         })
     return days
@@ -350,13 +363,23 @@ def alert_reasons(days: list, idx: int, cfg: dict) -> list:
     prob = d.get("precip_prob")
     mm = d.get("precip_mm") or 0
     rain_prob = int(cfg.get("alert_rain_prob", 40) or 40)
+    # 毫米阈值：0.2mm 是零星几滴，够不上带伞；1mm 以上才算真会湿
+    rain_mm = float(cfg.get("alert_rain_mm", 1.0) or 1.0)
+    trace_mm = 0.1
     rain_text = "雨" in str(d.get("text_day") or "") or "雪" in str(d.get("text_day") or "")
+
     if prob is not None and prob >= rain_prob:
-        out.append(f"{cur_label}降水概率 {prob:.0f}%，记得带伞")
-    elif mm >= 0.5:
-        # 和风没有概率；Open-Meteo 偶尔概率偏低但雨量扎实 —— 都按"有降水"提醒
-        out.append(f"{cur_label}预计有降水（{mm:.1f}mm）"
-                   + (f"，降水概率 {prob:.0f}%" if prob is not None else "") + "，记得带伞")
+        # 概率够，就看雨量决定措辞
+        if mm >= rain_mm:
+            out.append(f"{cur_label}有雨（{mm:.1f}mm），降水概率 {prob:.0f}%，记得带伞")
+        else:
+            out.append(f"{cur_label}降水概率 {prob:.0f}%，记得带伞")
+    elif mm >= rain_mm:
+        # 和风没有概率，只给雨量
+        out.append(f"{cur_label}有雨（{mm:.1f}mm），记得带伞")
+    elif mm >= trace_mm:
+        # 有量但不值得带伞
+        out.append(f"{cur_label}可能飘几滴（{mm:.1f}mm），出门看一眼天")
     elif prob is not None and rain_text and prob >= 20:
         out.append(f"{cur_label}可能下雨，出门带把伞更稳")
 
@@ -1201,16 +1224,23 @@ class DailyWeather(Star):
                 base = {"location": loc, "key": key, "lang": "zh"}
                 d3 = await self._http_json(f"https://{host}/v7/weather/3d", base)
                 now = await self._http_json(f"https://{host}/v7/weather/now", base)
+                # 和风把预警接口换成了 weatheralert/v1/current/{lat}/{lon}，
+                # 老的 /v7/warning/now 已废弃，返回 403 deprecated。
                 warn = {}
                 try:
-                    warn = await self._http_json(f"https://{host}/v7/warning/now", base)
-                except Exception:
+                    warn = await self._http_json(
+                        f"https://{host}/weatheralert/v1/current/{geo.get('lat')}/{geo.get('lon')}",
+                        {"key": key, "lang": "zh"},
+                    )
+                except Exception as exc:
+                    logger.info("%s 和风预警取不到（%s），这条按无预警处理", TAG, exc)
                     warn = {}
                 if str(d3.get("code")) != "200":
                     raise RuntimeError(f"和风天气查询失败 code={d3.get('code')}")
                 # 和风的实时天气嵌在 "now" 里（3d 嵌在 "daily"、预警嵌在 "warning"）
                 now_data = (now or {}).get("now") or {} if str((now or {}).get("code")) == "200" else {}
-                days = normalize_qweather(d3, now_data, display, warn.get("warning") or [])
+                alerts = warn.get("alerts") or warn.get("warning") or []
+                days = normalize_qweather(d3, now_data, display, alerts)
             except Exception as exc:
                 logger.warning("%s 和风取数失败，尝试回落 Open-Meteo: %s", TAG, exc)
                 days = None
@@ -1351,6 +1381,42 @@ class DailyWeather(Star):
                 "这条指令只有管理员能用哦～\n"
                 "查天气谁都可以：直接发 /天气 ，或 /天气 北京 查指定城市"
             )
+            return
+
+        if arg in ("诊断", "检查", "diag"):
+            cities = self._session_cities(umo) or self._push_cities(umo)
+            if not cities:
+                yield event.plain_result("先告诉我城市：/天气 订阅 南京")
+                return
+            hh = dt.datetime.now().hour
+            after = int(self.config.get("evening_after", 18) or 18)
+            idx = 0 if hh < after else 1
+            cap = self._cfg_int("max_push_cities", 3, 1, 10)
+            on = bool(self.config.get("alert_only", False))
+            lines = [f"alert_only {'开着' if on else '关着'}，现在算的是{'今天' if idx == 0 else '明天'}"]
+            for city in cities[:cap]:
+                days = await self.fetch_days(city)
+                if not days or idx >= len(days):
+                    lines.append(f"{city}：取不到数据")
+                    continue
+                d = days[idx]
+                reasons = alert_reasons(days, idx, self.config)
+                prob = d.get("precip_prob")
+                mm = d.get("precip_mm") or 0
+                lines.append(
+                    f"{city} {d.get('date')} {d.get('text_day')} "
+                    f"{d.get('tmin')}~{d.get('tmax')}℃ "
+                    f"概率{'-' if prob is None else f'{prob:.0f}%'} "
+                    f"量{mm:.1f}mm 风{d.get('wind_kmh')}km/h uv{d.get('uv')}"
+                )
+                warns = d.get("warnings") or []
+                if warns:
+                    lines.append(f"　预警 {len(warns)} 条：" + "；".join(warns))
+                else:
+                    lines.append("　预警 0 条")
+                plain_reasons = [r for r in reasons if not r.startswith("⚠️")]
+                lines.append("　" + ("；".join(plain_reasons) if plain_reasons else "没到阈值，这条不会推"))
+            yield event.plain_result("\n".join(lines))
             return
 
         if arg in ("订阅", "开", "on", "启用"):
